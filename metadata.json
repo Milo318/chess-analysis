@@ -1,0 +1,5 @@
+{
+  "name": "Grandmaster AI Chess Analysis",
+  "description": "A high-performance chess analysis tool that uses Gemini AI to provide move-by-move evaluations, labeling blunders, inaccuracies, and brilliant moves with GM-level commentary.",
+  "requestFramePermissions": []
+}

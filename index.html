@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GM Analysis Pro – Professional Chess Game Analysis</title>
+
+  <!-- SEO Meta Tags -->
+  <meta name="description"
+    content="Analyze your chess games like a grandmaster. Get Chess.com-style accuracy ratings, move quality badges (Brilliant, Best, Blunder), and detailed AI-powered game reviews. Powered by Stockfish.">
+  <meta name="keywords"
+    content="chess analysis, stockfish, pgn analyzer, game review, chess accuracy, move analysis, chess.com style">
+  <meta name="author" content="GM Analysis Pro">
+
+  <!-- Open Graph / Social Media -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="GM Analysis Pro – Professional Chess Game Analysis">
+  <meta property="og:description"
+    content="Analyze your chess games with grandmaster-level precision. Get accuracy ratings, move quality badges, and detailed game reviews.">
+  <meta property="og:image" content="/og-image.png">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="GM Analysis Pro">
+  <meta name="twitter:description" content="Professional chess analysis powered by Stockfish">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+    :root {
+      --neon-green: #22c55e;
+      --neon-cyan: #06b6d4;
+      --neon-blue: #3b82f6;
+      --neon-purple: #a855f7;
+      --neon-orange: #f97316;
+      --neon-red: #ef4444;
+      --neon-yellow: #eab308;
+      --glass-bg: rgba(30, 30, 30, 0.6);
+      --glass-border: rgba(255, 255, 255, 0.1);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: linear-gradient(135deg, #0a0a0a 0%, #1a1a2e 50%, #0f0f23 100%);
+      background-attachment: fixed;
+      color: #e5e7eb;
+      min-height: 100vh;
+    }
+
+    /* Neon Glow Effects */
+    .neon-glow-green {
+      box-shadow: 0 0 20px rgba(34, 197, 94, 0.4),
+        0 0 40px rgba(34, 197, 94, 0.2),
+        inset 0 0 20px rgba(34, 197, 94, 0.1);
+    }
+
+    .neon-glow-cyan {
+      box-shadow: 0 0 20px rgba(6, 182, 212, 0.4),
+        0 0 40px rgba(6, 182, 212, 0.2);
+    }
+
+    .neon-text-green {
+      text-shadow: 0 0 10px rgba(34, 197, 94, 0.8),
+        0 0 20px rgba(34, 197, 94, 0.5),
+        0 0 30px rgba(34, 197, 94, 0.3);
+    }
+
+    /* Glassmorphism */
+    .glass-card {
+      background: var(--glass-bg);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: 24px;
+    }
+
+    .glass-card-strong {
+      background: rgba(20, 20, 30, 0.8);
+      backdrop-filter: blur(30px);
+      -webkit-backdrop-filter: blur(30px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      border-radius: 28px;
+    }
+
+    /* Animated Eval Bar */
+    .eval-bar-glow {
+      background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+      box-shadow: 0 0 30px rgba(34, 197, 94, 0.6),
+        0 0 60px rgba(34, 197, 94, 0.3),
+        inset 0 2px 10px rgba(255, 255, 255, 0.3);
+      border-radius: 8px;
+    }
+
+    /* Circuit Pattern Background */
+    .circuit-pattern {
+      background-image:
+        radial-gradient(circle at 25% 25%, rgba(34, 197, 94, 0.03) 0%, transparent 50%),
+        radial-gradient(circle at 75% 75%, rgba(6, 182, 212, 0.03) 0%, transparent 50%);
+    }
+
+    /* Animated Border Gradient */
+    .gradient-border {
+      position: relative;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(6, 182, 212, 0.2));
+      border-radius: 24px;
+    }
+
+    .gradient-border::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 24px;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.5), rgba(6, 182, 212, 0.5));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+    }
+
+    /* Premium Button */
+    .btn-premium {
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      box-shadow: 0 4px 20px rgba(34, 197, 94, 0.4),
+        0 8px 40px rgba(34, 197, 94, 0.2);
+      transition: all 0.3s ease;
+    }
+
+    .btn-premium:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px rgba(34, 197, 94, 0.5),
+        0 12px 50px rgba(34, 197, 94, 0.3);
+    }
+
+    .btn-premium:active {
+      transform: translateY(0);
+    }
+
+    /* Chessboard Container Glow */
+    .board-container {
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(0, 0, 0, 0.5),
+        0 0 80px rgba(34, 197, 94, 0.1);
+    }
+
+    /* Move Quality Badge Glow */
+    .badge-brilliant {
+      background: linear-gradient(135deg, #06b6d4, #0891b2);
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.6);
+    }
+
+    .badge-great {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.6);
+    }
+
+    .badge-best {
+      background: linear-gradient(135deg, #22c55e, #16a34a);
+      box-shadow: 0 0 15px rgba(34, 197, 94, 0.6);
+    }
+
+    .badge-inaccuracy {
+      background: linear-gradient(135deg, #eab308, #ca8a04);
+      box-shadow: 0 0 15px rgba(234, 179, 8, 0.6);
+    }
+
+    .badge-mistake {
+      background: linear-gradient(135deg, #f97316, #ea580c);
+      box-shadow: 0 0 15px rgba(249, 115, 22, 0.6);
+    }
+
+    .badge-blunder {
+      background: linear-gradient(135deg, #ef4444, #dc2626);
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
+    }
+
+    /* Floating Elements Animation */
+    @keyframes float {
+
+      0%,
+      100% {
+        transform: translateY(0);
+      }
+
+      50% {
+        transform: translateY(-5px);
+      }
+    }
+
+    .float-animation {
+      animation: float 3s ease-in-out infinite;
+    }
+
+    /* Pulse Animation for active elements */
+    @keyframes pulse-glow {
+
+      0%,
+      100% {
+        box-shadow: 0 0 20px rgba(34, 197, 94, 0.4);
+      }
+
+      50% {
+        box-shadow: 0 0 40px rgba(34, 197, 94, 0.7);
+      }
+    }
+
+    .pulse-glow {
+      animation: pulse-glow 2s ease-in-out infinite;
+    }
+
+    /* Custom scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: rgba(30, 30, 30, 0.5);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, #22c55e, #16a34a);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, #16a34a, #15803d);
+    }
+  </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-chessboard": "https://esm.sh/react-chessboard@^5.8.6",
+    "chess.js": "https://esm.sh/chess.js@^1.4.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.38.0"
+  }
+}
+</script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+
+</html>
