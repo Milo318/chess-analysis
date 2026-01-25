@@ -1,12 +1,13 @@
 
 import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Chess, Move } from 'chess.js';
+import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { StockfishEngine } from './services/stockfishService';
 import { rewriteCommentaryWithGroq } from './services/groqService';
-import { GameReview, MoveAnalysis, MoveQuality } from './types';
+import { GameReview, MoveAnalysis, MoveQuality } from './gameTypes';
 import MoveBadge from './components/MoveBadge';
-import { cpToWinPercent, calculateMoveAccuracy, determineMoveQuality } from './src/utils/evaluationUtils';
+import { cpToWinPercent, calculateMoveAccuracy, determineMoveQuality } from './utils/evaluationUtils';
+import { robustParseGame } from './utils/pgnUtils';
 import {
   Play,
   Pause,
@@ -16,11 +17,10 @@ import {
   Search,
   Trophy,
   Activity,
-  MessageSquare,
-  Cpu,
   Loader2,
   AlertCircle,
-  FileText
+  FileText,
+  Cpu
 } from 'lucide-react';
 
 const App: React.FC = () => {
@@ -42,85 +42,10 @@ const App: React.FC = () => {
     return () => engineRef.current?.terminate();
   }, []);
 
-  /**
-   * Attempts to load a game from PGN, raw move list, or FEN.
-   * Highly resilient to malformed input, comments, and non-chess tokens.
-   */
-  const robustParseGame = useCallback((input: string): Chess | null => {
-    const tempGame = new Chess();
-    const trimmed = input.trim();
-    if (!trimmed) return null;
-
-    // 0. Try loading as FEN
-    try {
-      tempGame.load(trimmed);
-      // If we get here without throwing, it worked
-      return tempGame;
-    } catch (e) { /* Not a valid FEN, continue */ }
-
-    // 1. Try standard PGN loading
-    try {
-      const pgnGame = new Chess();
-      pgnGame.loadPgn(trimmed);
-      // If we get here without throwing, it worked
-      return pgnGame;
-    } catch (e) { /* Not a valid PGN, continue */ }
-
-    // 2. Heavy Cleaning & Manual Move Loading
-    // This part handles inputs like "1. e4 e5 2. Nf3 Nc6 (best is d4) 1-0" or messy site copies
-    try {
-      const manualGame = new Chess();
-
-      // Step A: Strip PGN headers [Tag "Value"]
-      let moveText = trimmed.replace(/\[[^\]]*\]/g, ' ');
-
-      // Step B: Strip comments and variations
-      // Remove {} comments, () variations, and [%clk ...] tags
-      moveText = moveText
-        .replace(/\{[^\}]*\}/g, ' ')
-        .replace(/\([^\)]*\)/g, ' ')
-        .replace(/\[%clk\s+[^\]]+\]/g, ' ');
-
-      // Step C: Clean move annotations (!, ?, !!, etc.)
-      moveText = moveText.replace(/[!?+#]+/g, (match) => {
-        // Keep + and # as they are part of SAN, but remove ! and ?
-        return match.replace(/[!?]+/g, '');
-      });
-
-      // Step D: Tokenize and filter
-      const tokens = moveText.split(/[\s\n\t]+/).filter(t => {
-        if (!t) return false;
-        // Ignore move numbers (1., 1..., 2., etc)
-        if (t.match(/^\d+\.*$/)) return false;
-        // Ignore game results
-        if (['1-0', '0-1', '1/2-1/2', '*', '½-½'].includes(t)) return false;
-        return true;
-      });
-
-      // Step E: Play moves one by one, skipping failures
-      let movesApplied = 0;
-      for (const token of tokens) {
-        try {
-          const result = manualGame.move(token);
-          if (result) movesApplied++;
-        } catch (e) {
-          // Skip invalid move tokens (might be leftover words or metadata)
-          console.debug(`Skipping non-move token: ${token}`);
-        }
-      }
-
-      if (movesApplied > 0) {
-        return manualGame;
-      }
-    } catch (e) { }
-
-    return null;
-  }, []);
-
   const moveHistoryDetailed = useMemo(() => {
     const parsed = robustParseGame(pgnInput);
     return parsed ? parsed.history({ verbose: true }) : [];
-  }, [pgnInput, robustParseGame]);
+  }, [pgnInput]);
 
   const moveHistory = useMemo(() => {
     if (analysis) return analysis.moves;
@@ -146,7 +71,7 @@ const App: React.FC = () => {
     }
     setGame(newGame);
     setCurrentMoveIndex(index);
-  }, [pgnInput, robustParseGame, moveHistoryDetailed.length]);
+  }, [pgnInput, moveHistoryDetailed.length]);
 
   useEffect(() => {
     if (isPlaying) {
@@ -160,17 +85,16 @@ const App: React.FC = () => {
           goToMove(next);
           return next;
         });
-      }, 1500); // Schnelleres Replay (1.5s statt 2.5s)
+      }, 1500);
     } else {
       if (playIntervalRef.current) clearInterval(playIntervalRef.current);
     }
     return () => { if (playIntervalRef.current) clearInterval(playIntervalRef.current); };
   }, [isPlaying, moveHistory.length, goToMove]);
 
-  // Tastatur-Navigation für Züge
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLTextAreaElement) return; // Ignoriere während Texteingabe
+      if (e.target instanceof HTMLTextAreaElement) return;
 
       switch (e.key) {
         case 'ArrowLeft':
@@ -204,9 +128,6 @@ const App: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [currentMoveIndex, moveHistory.length, goToMove, isPlaying]);
 
-
-
-  // Automatische Kommentar-Generierung basierend auf Zugqualität
   const generateCommentary = (quality: MoveQuality, cpLoss: number, bestMove?: string): string => {
     switch (quality) {
       case MoveQuality.BRILLIANT:
@@ -230,7 +151,6 @@ const App: React.FC = () => {
     }
   };
 
-  // Automatische Summary-Generierung
   const generateSummary = (moves: MoveAnalysis[], accWhite: number, accBlack: number): string => {
     const blunders = moves.filter(m => m.quality === MoveQuality.BLUNDER).length;
     const mistakes = moves.filter(m => m.quality === MoveQuality.MISTAKE).length;
@@ -284,7 +204,6 @@ const App: React.FC = () => {
       const engineResults: MoveAnalysis[] = [];
       const analysisGame = new Chess();
 
-      // Get starting evaluation with higher depth
       let lastEval = await engineRef.current.evaluate(analysisGame.fen(), 12);
       let totalAccuracyWhite = 0;
       let totalAccuracyBlack = 0;
@@ -296,26 +215,19 @@ const App: React.FC = () => {
         const isWhite = move.color === 'w';
         const bestMoveFromLastPos = lastEval.bestMove;
 
-        // FEN vor dem Zug
         const fenBefore = analysisGame.fen();
-
-        // Win% vor dem Zug (lastEval ist aus Sicht des Spielers der am Zug war)
         const winPercentBefore = cpToWinPercent(lastEval.score);
         const scoreBefore = lastEval.score;
 
         analysisGame.move(move.san);
-        const fenAfter = analysisGame.fen(); // FEN nach dem Zug
+        const fenAfter = analysisGame.fen();
 
         const currentEval = await engineRef.current.evaluate(analysisGame.fen(), 12);
 
-        // Win% nach dem Zug (currentEval ist aus Sicht des Gegners -> negieren für Spieler)
         const winPercentAfter = cpToWinPercent(-currentEval.score);
         const scoreAfter = -currentEval.score;
 
-        // cpLoss für Zugqualität
         const cpLoss = Math.max(0, scoreBefore - scoreAfter);
-
-        // Chess.com-Style Accuracy pro Zug
         const moveAccuracy = calculateMoveAccuracy(winPercentBefore, winPercentAfter);
 
         if (isWhite) {
@@ -326,7 +238,6 @@ const App: React.FC = () => {
           blackMoves++;
         }
 
-        // Zweitbester Zug für Brilliant/Great Erkennung
         const secondBestScore = lastEval.secondBestScore !== undefined
           ? lastEval.secondBestScore
           : undefined;
@@ -354,11 +265,9 @@ const App: React.FC = () => {
         setProgress(Math.round(((i + 1) / moves.length) * 95));
       }
 
-      // Durchschnittliche Accuracy
       const calculatedAccuracyWhite = whiteMoves > 0 ? Math.round(totalAccuracyWhite / whiteMoves) : 100;
       const calculatedAccuracyBlack = blackMoves > 0 ? Math.round(totalAccuracyBlack / blackMoves) : 100;
 
-      // Versuche Kommentare mit Groq umzuschreiben
       setProgress(98);
       try {
         const rewrittenComments = await rewriteCommentaryWithGroq(
@@ -369,8 +278,6 @@ const App: React.FC = () => {
         });
       } catch (e) {
         console.warn('Groq rewrite skipped:', e);
-        // Optional: Zeige Fehler aber brich nicht ab
-        // setError("AI Commentary unavailable (Quota/Error). Using standard analysis.");
       }
 
       setAnalysis({
@@ -428,6 +335,65 @@ const App: React.FC = () => {
     return 50 + (capped / 20);
   }, [currentAnalysis]);
 
+  const makeMove = useCallback((move: { from: string; to: string; promotion?: string }) => {
+    try {
+      const tempGame = new Chess();
+      if (game.pgn()) {
+          tempGame.loadPgn(game.pgn());
+      } else {
+          tempGame.load(game.fen());
+      }
+
+      const result = tempGame.move(move);
+
+      if (result) {
+        setGame(tempGame);
+        setPgnInput(tempGame.pgn());
+        setCurrentMoveIndex(tempGame.history().length - 1);
+        return true;
+      }
+    } catch (e) {
+      return false;
+    }
+    return false;
+  }, [game]);
+
+  const onPieceDrop = ({ sourceSquare, targetSquare }: { sourceSquare: string, targetSquare: string }) => {
+    const move = {
+      from: sourceSquare,
+      to: targetSquare,
+      promotion: 'q',
+    };
+    return makeMove(move);
+  };
+
+  const onSquareClick = ({ square }: { square: string }) => {
+      if (!moveFrom) {
+        const piece = game.get(square as any);
+        if (piece && piece.color === game.turn()) {
+          setMoveFrom(square);
+        }
+        return;
+      }
+
+      const move = {
+        from: moveFrom,
+        to: square,
+        promotion: 'q',
+      };
+
+      if (makeMove(move)) {
+          setMoveFrom(null);
+      } else {
+          const piece = game.get(square as any);
+          if (piece && piece.color === game.turn()) {
+              setMoveFrom(square);
+          } else {
+              setMoveFrom(null);
+          }
+      }
+  };
+
   return (
     <div className="min-h-screen circuit-pattern flex flex-col items-center p-4 lg:p-8">
       <header className="w-full max-w-7xl mb-8 flex items-center justify-between pb-4">
@@ -453,7 +419,6 @@ const App: React.FC = () => {
       <main className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="lg:col-span-7 flex flex-col gap-6">
           <div className="flex gap-4">
-            {/* Neon Eval Bar */}
             <div className="w-8 h-[400px] sm:h-[600px] glass-card overflow-hidden relative">
               <div
                 className="absolute bottom-0 w-full eval-bar-glow transition-all duration-1000 ease-out"
@@ -471,87 +436,8 @@ const App: React.FC = () => {
                 <Chessboard
                   options={{
                     position: game.fen(),
-                    onPieceDrop: ({ sourceSquare, targetSquare }) => {
-                      const move = {
-                        from: sourceSquare,
-                        to: targetSquare,
-                        promotion: 'q',
-                      };
-
-                      try {
-                        const tempGame = new Chess();
-                        const currentPgn = game.pgn();
-                        const hasHistory = currentPgn && currentPgn.trim().length > 0;
-
-                        if (hasHistory) {
-                          tempGame.loadPgn(currentPgn);
-                        } else {
-                          tempGame.load(game.fen());
-                        }
-
-                        const result = tempGame.move(move);
-
-                        if (result) {
-                          const newPgn = tempGame.pgn();
-                          setGame(tempGame);
-                          setPgnInput(newPgn);
-                          setCurrentMoveIndex(tempGame.history().length - 1);
-                          return true;
-                        }
-                      } catch (e) {
-                        console.error("Move error:", e);
-                        return false;
-                      }
-                      return false;
-                    },
-                    onSquareClick: ({ square }) => {
-                      if (!moveFrom) {
-                        const piece = game.get(square as any);
-                        if (piece && piece.color === game.turn()) {
-                          setMoveFrom(square);
-                        }
-                        return;
-                      }
-
-                      // Attempt move
-                      const move = {
-                        from: moveFrom,
-                        to: square,
-                        promotion: 'q',
-                      };
-
-                      try {
-                        const tempGame = new Chess();
-                        const currentPgn = game.pgn();
-                        const hasHistory = currentPgn && currentPgn.trim().length > 0;
-
-                        if (hasHistory) {
-                          tempGame.loadPgn(currentPgn);
-                        } else {
-                          tempGame.load(game.fen());
-                        }
-
-                        const result = tempGame.move(move);
-
-                        if (result) {
-                          const newPgn = tempGame.pgn();
-                          setGame(tempGame);
-                          setPgnInput(newPgn);
-                          setCurrentMoveIndex(tempGame.history().length - 1);
-                          setMoveFrom(null);
-                          return;
-                        } else {
-                          const piece = game.get(square as any);
-                          if (piece && piece.color === game.turn()) {
-                            setMoveFrom(square);
-                          } else {
-                            setMoveFrom(null);
-                          }
-                        }
-                      } catch (e) {
-                        setMoveFrom(null);
-                      }
-                    },
+                    onPieceDrop: onPieceDrop,
+                    onSquareClick: onSquareClick,
                     darkSquareStyle: { backgroundColor: '#779556' },
                     lightSquareStyle: { backgroundColor: '#ebecd0' },
                     squareStyles: customSquareStyles,
@@ -561,7 +447,6 @@ const App: React.FC = () => {
                 />
               </div>
 
-              {/* Modern Control Bar */}
               <div className="mt-6 flex items-center justify-between glass-card p-4">
                 <div className="flex gap-2">
                   <button
@@ -625,7 +510,6 @@ const App: React.FC = () => {
         </div>
 
         <div className="lg:col-span-5 flex flex-col gap-6">
-          {/* Import Game Panel */}
           <div className="glass-card-strong p-6">
             <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-green-400/70 mb-4 flex items-center gap-2">
               <Search size={14} /> Import Game
@@ -692,10 +576,8 @@ const App: React.FC = () => {
             </div>
           )}
 
-          {/* Moves List */}
           <div className="flex-1 glass-card flex flex-col min-h-[350px] overflow-hidden">
             <div className="flex-1 overflow-y-auto p-2 custom-scrollbar">
-              {/* Chess.com Style: Zwei-Spalten Layout */}
               {Array.from({ length: Math.ceil(moveHistory.length / 2) }).map((_, pairIdx) => {
                 const whiteIdx = pairIdx * 2;
                 const blackIdx = pairIdx * 2 + 1;
@@ -718,12 +600,10 @@ const App: React.FC = () => {
 
                 return (
                   <div key={pairIdx} className="flex items-stretch gap-1 mb-1">
-                    {/* Zugnummer */}
                     <div className="w-8 flex items-center justify-center text-xs text-gray-500 font-mono">
                       {pairIdx + 1}.
                     </div>
 
-                    {/* Weiß */}
                     <div
                       onClick={() => { setIsPlaying(false); goToMove(whiteIdx); }}
                       className={`flex-1 flex items-center gap-2 px-3 py-2 rounded cursor-pointer transition-all border
@@ -736,7 +616,6 @@ const App: React.FC = () => {
                       {whiteMove && <MoveBadge quality={whiteMove.quality} />}
                     </div>
 
-                    {/* Schwarz */}
                     {blackMove ? (
                       <div
                         onClick={() => { setIsPlaying(false); goToMove(blackIdx); }}
