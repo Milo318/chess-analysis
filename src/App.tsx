@@ -3,7 +3,6 @@ import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import { Chess } from 'chess.js';
 import { Chessboard } from 'react-chessboard';
 import { StockfishEngine } from './services/stockfishService';
-import { rewriteCommentaryWithGroq } from './services/groqService';
 import { GameReview, MoveAnalysis, MoveQuality } from './gameTypes';
 import MoveBadge from './components/MoveBadge';
 import { cpToWinPercent, calculateMoveAccuracy, determineMoveQuality } from './utils/evaluationUtils';
@@ -268,17 +267,7 @@ const App: React.FC = () => {
       const calculatedAccuracyWhite = whiteMoves > 0 ? Math.round(totalAccuracyWhite / whiteMoves) : 100;
       const calculatedAccuracyBlack = blackMoves > 0 ? Math.round(totalAccuracyBlack / blackMoves) : 100;
 
-      setProgress(98);
-      try {
-        const rewrittenComments = await rewriteCommentaryWithGroq(
-          engineResults.map(m => ({ san: m.san, quality: m.quality, commentary: m.commentary }))
-        );
-        engineResults.forEach((m, idx) => {
-          m.commentary = rewrittenComments[idx] || m.commentary;
-        });
-      } catch (e) {
-        console.warn('Groq rewrite skipped:', e);
-      }
+      setProgress(100);
 
       setAnalysis({
         moves: engineResults,
@@ -543,7 +532,7 @@ const App: React.FC = () => {
                   <div className="flex items-center justify-center gap-2">
                     <Loader2 size={12} className="animate-spin" />
                     <span className="text-[10px] uppercase tracking-widest">
-                      {progress < 75 ? `ENGINE ANALYSIS... ${progress}%` : `GENERATING AI REVIEW...`}
+                      {`ANALYZING GAME... ${progress}%`}
                     </span>
                   </div>
                 </div>
